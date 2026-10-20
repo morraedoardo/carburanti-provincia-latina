@@ -1,0 +1,47 @@
+name: Aggiorna dati carburanti MIMIT
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aggiornamento-dati-mimit
+  cancel-in-progress: false
+
+jobs:
+  aggiorna:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scarica il repository
+        uses: actions/checkout@v4
+      - name: Scarica i CSV ufficiali MIMIT
+        run: |
+          curl --fail --location --retry 3 --retry-delay 5 \
+            https://www.mimit.gov.it/images/exportCSV/prezzo_alle_8.csv \
+            --output prezzo_alle_8.csv
+          curl --fail --location --retry 3 --retry-delay 5 \
+            https://www.mimit.gov.it/images/exportCSV/anagrafica_impianti_attivi.csv \
+            --output anagrafica_impianti_attivi.csv
+          python - <<'PY'
+          from pathlib import Path
+          for name in ("prezzo_alle_8.csv", "anagrafica_impianti_attivi.csv"):
+              path = Path(name)
+              content = path.read_text(encoding="utf-8-sig", errors="replace")
+              if path.stat().st_size < 1000 or "idImpianto" not in content:
+                  raise SystemExit(f"CSV MIMIT non valido o incompleto: {path}")
+          PY
+      - name: Pubblica la cache aggiornata
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prezzo_alle_8.csv anagrafica_impianti_attivi.csv
+          if git diff --cached --quiet; then
+            echo "I dati MIMIT non sono cambiati; nessun commit necessario."
+          else
+            git commit -m "Aggiorna dati carburanti MIMIT"
+            git push
+          fi
