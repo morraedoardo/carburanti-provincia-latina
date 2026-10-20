@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from io import StringIO
 from html import escape
+from pathlib import Path
 import ssl
 import re
 
@@ -51,16 +52,12 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def fetch_csv(url: str) -> tuple[pd.DataFrame, str | None]:
-    response = HTTP.get(url, headers=HEADERS, timeout=45)
-    response.raise_for_status()
-    response.encoding = response.apparent_encoding or "utf-8"
-    raw = response.text
+def parse_csv(raw: str, source: str) -> tuple[pd.DataFrame, str | None]:
     # Il file MIMIT inizia con una riga informativa e poi con l'intestazione.
     lines = raw.splitlines()
     header_line = next((i for i, line in enumerate(lines) if "idImpianto" in line), None)
     if header_line is None:
-        raise ValueError(f"Intestazione CSV non riconosciuta da {url}")
+        raise ValueError(f"Intestazione CSV non riconosciuta in {source}")
     extracted = None
     for line in lines[:header_line]:
         m = re.search(r"(\d{4}-\d{2}-\d{2})", line)
@@ -69,6 +66,13 @@ def fetch_csv(url: str) -> tuple[pd.DataFrame, str | None]:
             break
     df = pd.read_csv(StringIO("\n".join(lines[header_line:])), sep="|", dtype=str, on_bad_lines="skip")
     return normalize_columns(df), extracted
+
+
+def read_cached_csv(filename: str) -> tuple[pd.DataFrame, str | None]:
+    path = Path(__file__).parent / filename
+    if not path.is_file():
+        raise FileNotFoundError(f"Cache dati MIMIT non trovata: {path}")
+    return parse_csv(path.read_text(encoding="utf-8-sig", errors="replace"), str(path))
 
 
 def col(df: pd.DataFrame, *names: str) -> str:
@@ -84,9 +88,10 @@ def col(df: pd.DataFrame, *names: str) -> str:
 
 @st.cache_data(ttl=0, show_spinner=False)
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame, str, datetime]:
-    # ttl=0: ad ogni nuova apertura/sessione si interrogano i file ufficiali.
-    stations, station_date = fetch_csv(STATIONS_URL)
-    prices, price_date = fetch_csv(PRICES_URL)
+    # La cache viene aggiornata ogni giorno dal workflow GitHub scaricando i
+    # CSV ufficiali. Leggendola localmente evitiamo timeout MIMIT su Streamlit.
+    stations, station_date = read_cached_csv("anagrafica_impianti_attivi.csv")
+    prices, price_date = read_cached_csv("prezzo_alle_8.csv")
     sid, pid = col(stations, "idImpianto"), col(prices, "idImpianto")
     stations = stations.rename(columns={sid: "id"})
     prices = prices.rename(columns={pid: "id"})

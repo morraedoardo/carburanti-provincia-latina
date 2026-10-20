@@ -16,7 +16,7 @@ streamlit run app.py
 3. Seleziona il repository, il branch e `app.py` come file principale.
 4. Scegli il sottodominio dell'app e avvia il deploy.
 
-L'app scarica i CSV MIMIT a ogni avvio/sessione e non richiede segreti o API key. I prezzi sono comunicati dai gestori e possono differire da quelli esposti alla pompa; nell'app è indicata la data di comunicazione.
+I CSV ufficiali sono salvati nella radice del repository e aggiornati ogni giorno alle 08:30 UTC da GitHub Actions. Il workflow usa il token automatico GitHub `GITHUB_TOKEN`, limitato a questo repository e con il solo permesso di scrivere i contenuti necessari per aggiornare i file. Puoi avviare un aggiornamento anche dalla scheda **Actions** con **Run workflow**. Streamlit legge i dati aggiornati dal repository e non deve collegarsi direttamente al sito MIMIT. I prezzi sono comunicati dai gestori e possono differire da quelli esposti alla pompa; nell'app è indicata la data di comunicazione.
 
 Fonte dati: [MIMIT — Prezzi praticati e anagrafica degli impianti](https://www.mimit.gov.it/it/open-data/elenco-dataset/carburanti-prezzi-praticati-e-anagrafica-degli-impianti).
 
